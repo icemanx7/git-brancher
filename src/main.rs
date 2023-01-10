@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -14,5 +16,20 @@ fn main() {
 
     let branch: String = format!("{}-{}", args.ticket_number, desc);
 
-    println!("{}", branch)
+    println!("{}", branch);
+
+    if does_git_exist() {
+        println!("{}", branch_git(branch));
+    }
+}
+
+fn does_git_exist() -> bool {
+    return std::process::Command::new("git").output().is_ok();
+}
+
+fn branch_git(branch_name: String) -> bool {
+    return std::process::Command::new("git")
+        .args(["checkout", "-b", branch_name.borrow()])
+        .spawn()
+        .is_ok();
 }
