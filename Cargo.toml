@@ -12,3 +12,7 @@ reqwest = "0.11.13"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1.0"
 urlencoding = "2.1.2"
+base64 = "0.10.1"
+regex = "1"
+toml = "0.5.11"
+home = "0.5.4"

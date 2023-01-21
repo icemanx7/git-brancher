@@ -1,13 +1,14 @@
 use serde::Deserialize;
-use std::borrow::Borrow;
+use std::{borrow::Borrow, fs};
 
 use clap::Parser;
 
 use std::env;
 
+//TODO: Move thise into seperate types folder
 #[derive(Parser, Debug)]
 struct CliArguments {
-    ticket_link: String,
+    ticket_number: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -16,6 +17,12 @@ struct Ticket {
     fields: Field,
 }
 
+#[derive(Deserialize)]
+struct Config {
+    jira_credentials: JiraCredentials,
+}
+
+#[derive(Deserialize)]
 struct JiraCredentials {
     username: String,
     token: String,
@@ -29,12 +36,22 @@ struct Field {
 #[tokio::main]
 async fn main() {
     let args: CliArguments = CliArguments::parse();
-    let vars = read_env_var();
+    let vars = read_config();
     let client = reqwest::Client::new();
+    let strings = format!(
+        "{}:{}",
+        vars.jira_credentials.username, vars.jira_credentials.token
+    );
+    let b64 = base64::encode(&strings);
+    let ff = format!("Basic {}", b64);
+    let url = format!(
+        "https://clearscore.atlassian.net/rest/api/latest/issue/{}",
+        args.ticket_number
+    );
 
     let response = client
-        .get(args.ticket_link)
-        .basic_auth(vars.username, Some(vars.token))
+        .get(url)
+        .header("Authorization", ff)
         .send()
         .await
         .expect("some")
@@ -44,7 +61,6 @@ async fn main() {
     match response {
         Ok(res) => {
             let v = serde_json::from_str::<Ticket>(&res);
-            println!("{:?}", v);
             match v {
                 Ok(resp) => {
                     let desc: String = resp.fields.summary.to_lowercase().replace(" ", "-");
@@ -68,19 +84,23 @@ fn does_git_exist() -> bool {
 
 fn branch_git(branch_name: String) -> bool {
     return std::process::Command::new("git")
-        .args(["checkout", "-b", branch_name.borrow()])
+        .args([
+            "checkout",
+            "-b",
+            branch_name
+                .replace(".", "") //TODO: get the replace regex for this [!"#$%&'()*+,.\/:;<=>?@[\]^_`{|}~]
+                .replace(",", "")
+                .replace(" ", "")
+                .borrow(),
+        ])
         .spawn()
         .is_ok();
 }
 
-fn read_env_var() -> JiraCredentials {
-    let jira_token = env::var("JIRA_TOKEN");
-    let jira_username = env::var("JIRA_USERNAME");
-    return match (jira_token, jira_username) {
-        (Ok(token), Ok(username)) => JiraCredentials { username, token },
-        _ => JiraCredentials {
-            username: "".to_owned(),
-            token: "".to_owned(),
-        },
-    };
+fn read_config() -> Config {
+    let contents =
+        fs::read_to_string("./config.toml").expect("Should have been able to read the file");
+
+    let config: Config = toml::from_str(contents.borrow()).unwrap();
+    return config;
 }
